@@ -1,0 +1,5253 @@
+openapi: 3.0.4
+info:
+  title: Flood Rescue & Relief System API
+  description: |-
+    API documentation for Flood Rescue & Relief Management System.
+
+    This system manages rescue and relief operations during flood emergencies, including:
+    - User authentication and authorization
+    - Emergency rescue/relief requests
+    - Mission assignment and tracking
+    - Resource and inventory management
+    - Real-time team position tracking
+    - Notifications and reporting
+
+    **Roles:**
+    - Citizen: Can submit requests and view their status
+    - Rescue Team: Receives and executes missions
+    - Rescue Coordinator: Manages requests and assigns missions
+    - Manager: Manages resources and inventory
+    - Admin: Full system access
+
+    **Production Server:** https://flood-rescue.onrender.com
+  contact:
+    email: duylase184704@fpt.edu.vn
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+  version: 1.0.0
+servers:
+  - url: https://flood-rescue.onrender.com
+    description: Production server
+  - url: http://localhost:8080
+    description: Local development server
+tags:
+  - name: Auth
+    description: Authentication and user management
+  - name: Requests
+    description: Rescue and relief request operations
+  - name: Missions
+    description: Mission management and tracking
+  - name: Timelines
+    description: Timeline tracking for rescue missions
+  - name: Teams
+    description: Rescue team management
+  - name: Resources
+    description: Vehicle and equipment management
+  - name: Inventory
+    description: Relief supplies and inventory management
+  - name: Notifications
+    description: System notifications
+  - name: Reports
+    description: Reporting and analytics
+  - name: Admin
+    description: Administrative operations
+  - name: System
+    description: System configuration and settings
+  - name: Timeline Supplies
+    description: Tracking supply pickup and return per team
+
+
+paths:
+  /api/auth/register:
+    post:
+      tags:
+        - Auth
+      summary: Register new user account
+      description: Register a new user account (default role is Citizen)
+      operationId: register
+      requestBody:
+        description: User registration information
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterRequest"
+      responses:
+        "201":
+          description: Registration successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthRegisterResponse"
+        "400":
+          description: Invalid input or email already exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /api/auth/login:
+    post:
+      tags:
+        - Auth
+      summary: User login
+      description: |-
+        Login to the system with email and password.
+        Returns access token in response body and refresh token in HTTP-only cookie.
+      operationId: login
+      requestBody:
+        description: Login credentials
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Login successful. Refresh token is set in HTTP-only cookie.
+          headers:
+            Set-Cookie:
+              description: HTTP-only cookie containing refresh token (7 days)
+              schema:
+                type: string
+                example: refreshToken=abc123...; HttpOnly; Secure; SameSite=None; Max-Age=604800
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthLoginResponse"
+        "400":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /api/auth/refresh:
+    post:
+      tags:
+        - Auth
+      summary: Refresh access token
+      description: |
+        Refresh access token bằng refresh token lưu trong HTTP-only cookie. Không cần Authorization header.
+      operationId: refreshToken
+      parameters:
+        - name: refreshToken
+          in: cookie
+          required: true
+          description: Refresh token được set trong cookie khi đăng nhập
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Refresh thành công, trả về access token mới
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthRefreshResponse"
+        "401":
+          description: Refresh token không hợp lệ hoặc đã hết hạn
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /api/auth/me:
+    get:
+      tags:
+        - Auth
+      summary: Get current user information
+      description: Get information of currently authenticated user
+      operationId: getCurrentUser
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: User information retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthMeResponse"
+        "401":
+          description: Unauthorized - invalid or missing token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /api/auth/logout:
+    post:
+      tags:
+        - Auth
+      summary: Logout
+      description: |-
+        Logout user by deleting refresh token from database and clearing cookie.
+        Requires refresh token in HTTP-only cookie.
+      operationId: logout
+      security:
+        - bearerAuth: []
+      responses:
+        "204":
+          description: Logout successful. Cookie is cleared.
+        "401":
+          description: Unauthorized - invalid or missing token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "400":
+          description: No refresh token found in cookie
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /api/requests:
+    get:
+      tags:
+        - Requests
+      summary: List all requests
+      description: "Get list of rescue/relief requests with pagination and filtering (Roles: Rescue Coordinator, Rescue Team)"
+      operationId: listRequests
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          description: Filter by request status
+          required: false
+          schema:
+            type: string
+            enum:
+              - SUBMITTED
+              - VERIFIED
+              - REJECTED
+              - IN_PROGRESS
+              - PARTIALLY_FULFILLED
+              - FULFILLED
+              - CLOSED
+              - CANCELLED
+        - name: type
+          in: query
+          description: Filter by request type
+          required: false
+          schema:
+            type: string
+            enum:
+              - Rescue
+              - Relief
+        - name: incidentType
+          in: query
+          description: Filter by incident type
+          required: false
+          schema:
+            type: string
+            enum:
+              - Flood
+              - Trapped
+              - Injured
+              - Landslide
+              - Other
+        - name: priority
+          in: query
+          description: Filter by priority level
+          required: false
+          schema:
+            type: string
+            enum:
+              - Critical
+              - High
+              - Normal
+        - name: userName
+          in: query
+          description: Filter by requester name (case-insensitive)
+          required: false
+          schema:
+            type: string
+        - name: source
+          in: query
+          description: Filter by request source
+          required: false
+          schema:
+            type: string
+            enum:
+              - CITIZEN
+              - COORDINATOR
+        - name: createdBy
+          in: query
+          description: Filter by creator ID (ObjectId)
+          required: false
+          schema:
+            type: string
+        - name: page
+          in: query
+          description: Page number for pagination
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+        - name: limit
+          in: query
+          description: Number of items per page
+          schema:
+            type: integer
+            default: 10
+            minimum: 1
+            maximum: 100
+      responses:
+        "200":
+          description: Requests retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RequestListResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: Forbidden - insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+    post:
+      tags:
+        - Requests
+      summary: Create new request
+      description: Create a new rescue or relief request (Citizen only)
+      operationId: addRequest
+      security:
+        - bearerAuth: []
+      requestBody:
+        description: Request information
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateRequestInput"
+      responses:
+        "201":
+          description: Request created successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RequestResponse"
+        "400":
+          description: Invalid input or validation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /api/requests/my:
+    get:
+      tags:
+        - Requests
+      summary: Get my requests
+      description: "Get all requests submitted by the current user with pagination and filtering (Role: Citizen)"
+      operationId: getMyRequests
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          description: Filter by request status
+          required: false
+          schema:
+            type: string
+            enum:
+              - SUBMITTED
+              - VERIFIED
+              - REJECTED
+              - IN_PROGRESS
+              - PARTIALLY_FULFILLED
+              - FULFILLED
+              - CLOSED
+              - CANCELLED
+        - name: type
+          in: query
+          description: Filter by request type
+          required: false
+          schema:
+            type: string
+            enum:
+              - Rescue
+              - Relief
+        - name: incidentType
+          in: query
+          description: Filter by incident type
+          required: false
+          schema:
+            type: string
+            enum:
+              - Flood
+              - Trapped
+              - Injured
+              - Landslide
+              - Other
+        - name: priority
+          in: query
+          description: Filter by priority level
+          required: false
+          schema:
+            type: string
+            enum:
+              - Critical
+              - High
+              - Normal
+        - name: page
+          in: query
+          description: Page number for pagination
+          required: false
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+        - name: limit
+          in: query
+          description: Number of items per page
+          required: false
+          schema:
+            type: integer
+            default: 10
+            minimum: 1
+            maximum: 100
+      responses:
+        "200":
+          description: Requests retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RequestListResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /api/requests/{requestId}:
+    get:
+      tags:
+        - Requests
+      summary: Get request detail
+      description: Get detailed information about a specific request
+      operationId: getRequestDetail
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: requestId
+          in: path
+          description: Request ID
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Request detail retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RequestResponse"
+        "404":
+          description: Request not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /api/requests/{requestId}/verify:
+    patch:
+      tags:
+        - Requests
+      summary: Verify or reject request
+      description: Coordinator verifies or rejects a request (SUBMITTED → VERIFIED/REJECTED)
+      operationId: verifyRequest
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: requestId
+          in: path
+          required: true
+          description: Request ID
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VerifyRequestInput"
+      responses:
+        "200":
+          description: Request verified or rejected successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RequestResponse"
+        "400":
+          description: Invalid input or transition
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: Forbidden - Coordinator only
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Request not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /api/requests/{requestId}/close:
+    patch:
+      tags:
+        - Requests
+      summary: Close request
+      description: Coordinator closes a request (FULFILLED/PARTIALLY_FULFILLED → CLOSED)
+      operationId: closeRequest
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: requestId
+          in: path
+          required: true
+          description: Request ID
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Request closed successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RequestResponse"
+        "400":
+          description: Invalid transition
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: Forbidden - Coordinator only
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Request not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /api/requests/{requestId}/duplicate:
+    patch:
+      tags:
+        - Requests
+      summary: Mark request as duplicate
+      description: Coordinator marks a request as duplicate of another request
+      operationId: markDuplicate
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: requestId
+          in: path
+          required: true
+          description: Request ID
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MarkDuplicateInput"
+      responses:
+        "200":
+          description: Request marked as duplicate successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RequestResponse"
+        "400":
+          description: Invalid input or status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: Forbidden - Coordinator only
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Request not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /api/requests/{requestId}/location:
+    patch:
+      tags:
+        - Requests
+      summary: Update request location
+      description: Coordinator updates and verifies request location
+      operationId: updateRequestLocation
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: requestId
+          in: path
+          required: true
+          description: Request ID
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateLocationInput"
+      responses:
+        "200":
+          description: Request location updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RequestResponse"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: Forbidden - Coordinator only
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Request not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /api/requests/{requestId}/priority:
+    patch:
+      tags:
+        - Requests
+      summary: Update request priority
+      description: Coordinator updates request priority
+      operationId: updateRequestPriority
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: requestId
+          in: path
+          required: true
+          description: Request ID
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdatePriorityInput"
+      responses:
+        "200":
+          description: Request priority updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RequestResponse"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: Forbidden - Coordinator only
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Request not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /api/requests/{requestId}/cancel:
+    patch:
+      tags:
+        - Requests
+      summary: Cancel request
+      description: Citizen cancels own request or Coordinator cancels any SUBMITTED request
+      operationId: cancelRequest
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: requestId
+          in: path
+          required: true
+          description: Request ID
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CancelRequestInput"
+      responses:
+        "200":
+          description: Request cancelled successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RequestResponse"
+        "400":
+          description: Invalid input or status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: Forbidden - not request owner
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Request not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /api/requests/on-behalf:
+    post:
+      tags:
+        - Requests
+      summary: Create request on behalf of citizen
+      description: |
+        Coordinator creates a request on behalf of a citizen.
+        - If `citizenId` is provided: links to existing citizen account, checks 1 active request rule.
+        - If `citizenId` is NOT provided: requires `userName` and `phoneNumber` for unregistered citizen.
+        - Status is automatically set to `VERIFIED`.
+        - `source` is set to `COORDINATOR`, `createdBy` = coordinator ID.
+      operationId: createRequestOnBehalf
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateRequestOnBehalfInput"
+      responses:
+        "201":
+          description: Request created on behalf successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RequestResponse"
+        "400":
+          description: Validation failed or citizen has active request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: Forbidden - Coordinator only
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Citizen not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /api/requests/search-citizens:
+    get:
+      tags:
+        - Requests
+      summary: Search citizens for on-behalf creation
+      description: |
+        Coordinator searches for citizens by display name or phone number.
+        Only returns active users with role = Citizen. Limited to 10 results.
+      operationId: searchCitizens
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: q
+          in: query
+          description: Search keyword (min 2 characters)
+          required: true
+          schema:
+            type: string
+            minLength: 2
+      responses:
+        "200":
+          description: Citizens found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SearchCitizensResponse"
+        "400":
+          description: Search query too short
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: Forbidden - Coordinator only
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /api/missions:
+    post:
+      tags:
+        - Missions
+      summary: Create mission
+      description: "Create a new mission (initial status = DRAFT). Request/team planning is done via /{id}/requests and /{id}/teams. (Roles: Rescue Coordinator, Admin)"
+      operationId: createMission
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateMissionInput"
+      responses:
+        "201":
+          description: Mission created successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Mission"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: Forbidden - Coordinator/Admin only
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+    get:
+      tags:
+        - Missions
+      summary: List missions
+      description: "Get list of missions with pagination and filtering. (Roles: Rescue Coordinator, Admin)"
+      operationId: listMissions
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          description: Filter by mission status
+          required: false
+          schema:
+            type: string
+            enum: [DRAFT, PLANNED, IN_PROGRESS, PAUSED, PARTIAL, COMPLETED, ABORTED]
+        - name: type
+          in: query
+          description: Filter by mission type
+          required: false
+          schema:
+            type: string
+            enum: [RESCUE, RELIEF]
+        - name: code
+          in: query
+          description: Filter by mission code (partial match)
+          required: false
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+            minimum: 1
+            maximum: 100
+      responses:
+        "200":
+          description: Missions retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Mission"
+                  meta:
+                    $ref: "#/components/schemas/Pagination"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /api/missions/{id}:
+    get:
+      tags:
+        - Missions
+      summary: Get mission detail
+      description: Get detailed information about a specific mission
+      operationId: getMissionDetail
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          description: Mission ID
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Mission detail retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Mission"
+        "404":
+          description: Mission not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+    patch:
+      tags:
+        - Missions
+      summary: Update mission
+      description: "Update mission name, description or priority. Status cannot be updated here — use /pause, /resume, /abort. (Roles: Rescue Coordinator, Admin)"
+      operationId: updateMission
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          description: Mission ID
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateMissionInput"
+      responses:
+        "200":
+          description: Mission updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Mission"
+        "400":
+          description: Invalid input or direct status update attempted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Mission not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+    delete:
+      tags:
+        - Missions
+      summary: Delete mission
+      description: "Delete a mission. Cannot delete if there are active timelines. (Roles: Rescue Coordinator, Admin)"
+      operationId: deleteMission
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          description: Mission ID
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Mission deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Mission deleted successfully
+        "400":
+          description: Cannot delete mission with active timelines
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Mission not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /api/team-requests/{id}/complete:
+    post:
+      tags:
+        - Missions
+      summary: Complete a TeamRequest (new recommended way)
+      description: |
+        Team completes their work on a specific request within a mission.
+        - System auto-determines outcome (COMPLETED/PARTIAL) based on rescuedCountTotal vs peopleNeeded
+        - Team must be ON_SITE to complete
+        - If this is the last incomplete TeamRequest for the team in the mission, Timeline is auto-completed
+        - Syncs MissionRequest/Request/Mission statuses
+      operationId: completeTeamRequest
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: TeamRequest ID
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                note:
+                  type: string
+                  maxLength: 1000
+                  nullable: true
+                  description: Optional note about the completion
+      responses:
+        "200":
+          description: TeamRequest completed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Team request completed successfully"
+                  data:
+                    allOf:
+                      - $ref: "#/components/schemas/TeamRequest"
+                      - type: object
+                        properties:
+                          outcome:
+                            type: string
+                            enum: [COMPLETED, PARTIAL]
+                            description: Auto-determined based on rescued count vs target
+                          completedAt:
+                            type: string
+                            format: date-time
+                          completedBy:
+                            type: string
+        "400":
+          description: Invalid request (already completed, Timeline not ON_SITE, etc.)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: Forbidden - not team member or wrong team
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: TeamRequest not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /api/missions/{id}/requests:
+    get:
+      tags:
+        - Missions
+      summary: List requests in a mission
+      description: "Get mission requests associated with a mission. Rescue Team can see requests immediately after assignment (Option A pre-create TeamRequest matrix). Supports teamId filter for supervisor/coordinator view. (Roles: Rescue Coordinator, Admin, Rescue Team)"
+      operationId: getMissionRequests
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          description: Mission ID
+          required: true
+          schema:
+            type: string
+        - name: teamId
+          in: query
+          required: false
+          description: Optional team filter. Team must be assigned to mission.
+          schema:
+            type: string
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 10
+      responses:
+        "200":
+          description: Mission requests retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/MissionRequest"
+        "404":
+          description: Mission not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /api/mission-requests/{id}/progress:
+    post:
+      tags:
+        - Missions
+      summary: Team updates mission request progress
+      description: "Rescue Team updates contribution for a mission request. Backend writes TeamRequest first and syncs aggregate back to MissionRequest."
+      operationId: updateMissionRequestProgress
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: MissionRequest ID
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MissionRequestProgressInput"
+      responses:
+        "200":
+          description: Mission request progress updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    $ref: "#/components/schemas/MissionRequest"
+        "400":
+          description: Invalid payload or invalid state transition
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: Forbidden - team is not assigned to mission or user has no team
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: MissionRequest not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "422":
+          description: Supply over-delivery (SUPPLY_OVER_DELIVERY)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /api/team-requests:
+    get:
+      tags:
+        - Missions
+      summary: List TeamRequest audit records
+      description: "List TeamRequest records for per-team contribution audit. Rescue Team only sees its own team records."
+      operationId: listTeamRequests
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: missionId
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: missionRequestId
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: teamId
+          in: query
+          required: false
+          description: Ignored for Rescue Team role and auto-forced to own team.
+          schema:
+            type: string
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 10
+      responses:
+        "200":
+          description: Team requests retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/TeamRequest"
+                      total:
+                        type: integer
+                      page:
+                        type: integer
+                      limit:
+                        type: integer
+                      totalPages:
+                        type: integer
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /api/team-requests/{id}:
+    get:
+      tags:
+        - Missions
+      summary: Get TeamRequest detail
+      description: "Get a TeamRequest record by ID. Rescue Team can only access records of its own team."
+      operationId: getTeamRequestById
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Team request retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    $ref: "#/components/schemas/TeamRequest"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Team request not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+    post:
+      tags:
+        - Missions
+      summary: Add requests to mission
+      description: "Add one or many request IDs to a DRAFT mission and create MissionRequest records. (Roles: Rescue Coordinator, Admin)"
+      operationId: addRequestsToMission
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          description: Mission ID
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MissionAddRequestsInput"
+      responses:
+        "200":
+          description: Requests added to mission successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/MissionRequest"
+        "400":
+          description: Mission is not DRAFT or request status is invalid
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Mission or Request not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /api/missions/{id}/teams:
+    post:
+      tags:
+        - Missions
+      summary: Add teams to mission
+      description: "Add one or many teams to a DRAFT mission by creating PLANNED timelines. (Roles: Rescue Coordinator, Admin)"
+      operationId: addTeamsToMission
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          description: Mission ID
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MissionAddTeamsInput"
+      responses:
+        "200":
+          description: Teams assigned to mission successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Timeline"
+        "400":
+          description: Mission is not DRAFT
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Mission or Team not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /api/missions/{id}/requests/{requestId}:
+    delete:
+      tags:
+        - Missions
+      summary: Remove request from mission
+      description: "Remove one request link from a DRAFT mission. Only PENDING mission-requests can be removed. (Roles: Rescue Coordinator, Admin)"
+      operationId: removeRequestFromMission
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          description: Mission ID
+          required: true
+          schema:
+            type: string
+        - name: requestId
+          in: path
+          description: Request ID to remove from mission
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Request removed from mission successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: object
+                    properties:
+                      missionId:
+                        type: string
+                      requestId:
+                        type: string
+                      removed:
+                        type: boolean
+        "400":
+          description: Mission is not DRAFT or mission-request status is invalid for remove
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Mission or request link not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /api/missions/{id}/teams/{teamId}:
+    delete:
+      tags:
+        - Missions
+      summary: Remove team from mission
+      description: "Remove one team link from a DRAFT mission. Only PLANNED or ASSIGNED timelines can be removed. (Roles: Rescue Coordinator, Admin)"
+      operationId: removeTeamFromMission
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          description: Mission ID
+          required: true
+          schema:
+            type: string
+        - name: teamId
+          in: path
+          description: Team ID to remove from mission
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Team removed from mission successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: object
+                    properties:
+                      missionId:
+                        type: string
+                      teamId:
+                        type: string
+                      removed:
+                        type: boolean
+        "400":
+          description: Mission is not DRAFT or timeline status is invalid for remove
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Mission or team link not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /api/missions/{id}/start:
+    patch:
+      tags:
+        - Missions
+      summary: Start mission planning
+      description: "Move a DRAFT mission to PLANNED and convert PLANNED timelines to ASSIGNED. Requires at least one MissionRequest and one PLANNED timeline. (Roles: Rescue Coordinator, Admin)"
+      operationId: startMission
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          description: Mission ID
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StartMissionInput"
+      responses:
+        "200":
+          description: Mission started successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Mission"
+        "400":
+          description: Mission is not DRAFT, has no requests, or has no PLANNED timelines
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Mission not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /api/missions/{id}/pause:
+    patch:
+      tags:
+        - Missions
+      summary: Pause mission
+      description: "Pause an IN_PROGRESS mission. Active timelines continue running — pausing only prevents new team assignments. (Roles: Rescue Coordinator, Admin)"
+      operationId: pauseMission
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          description: Mission ID
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Mission paused successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Mission"
+        "400":
+          description: Mission is not IN_PROGRESS
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Mission not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /api/mission-requests/{id}:
+    get:
+      tags:
+        - Missions
+      summary: Get mission request detail
+      description: "Get details of a specific MissionRequest. (Roles: Rescue Coordinator, Admin, Rescue Team)"
+      operationId: getMissionRequestById
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: MissionRequest ID
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Mission request retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    $ref: "#/components/schemas/MissionRequest"
+        "400":
+          description: Invalid MissionRequest ID
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: MissionRequest not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /api/mission-requests/{id}/close:
+    patch:
+      tags:
+        - Missions
+      summary: Manually close mission request
+      description: "Transition MissionRequest to CLOSED. (Roles: Rescue Coordinator, Admin)"
+      operationId: closeMissionRequest
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: MissionRequest ID
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MissionRequestActionInput"
+      responses:
+        "200":
+          description: Mission request closed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    $ref: "#/components/schemas/MissionRequest"
+        "400":
+          description: Invalid transition or invalid MissionRequest ID
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: MissionRequest not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /api/mission-requests/{id}/drop:
+    patch:
+      tags:
+        - Missions
+      summary: Manually drop mission request
+      description: "Transition MissionRequest to DROPPED. (Roles: Rescue Coordinator, Admin)"
+      operationId: dropMissionRequest
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: MissionRequest ID
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MissionRequestActionInput"
+      responses:
+        "200":
+          description: Mission request dropped successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    $ref: "#/components/schemas/MissionRequest"
+        "400":
+          description: Invalid transition or invalid MissionRequest ID
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: MissionRequest not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /api/missions/{id}/resume:
+    patch:
+      tags:
+        - Missions
+      summary: Resume mission
+      description: "Resume a PAUSED mission back to IN_PROGRESS. (Roles: Rescue Coordinator, Admin)"
+      operationId: resumeMission
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          description: Mission ID
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Mission resumed successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Mission"
+        "400":
+          description: Mission is not PAUSED
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Mission not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /api/missions/{id}/abort:
+    patch:
+      tags:
+        - Missions
+      summary: Abort mission
+      description: |
+        Force-abort a mission. Automatically cancels all active timelines (ASSIGNED, EN_ROUTE, ON_SITE).
+        Cannot abort a COMPLETED or already ABORTED mission. (Roles: Rescue Coordinator, Admin)
+      operationId: abortMission
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          description: Mission ID
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Mission aborted and all active timelines cancelled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Mission"
+        "400":
+          description: Mission is already closed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Mission not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /api/resources:
+    get:
+      tags:
+        - Resources
+      summary: List resources
+      description: Get list of vehicles and equipment (Manager/Coordinator only)
+      operationId: listResources
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Resources retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Resource"
+        "403":
+          description: Forbidden - insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    post:
+      tags:
+        - Resources
+      summary: Create resource
+      description: Add new vehicle or equipment (Manager only)
+      operationId: createResource
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  example: "Rescue Boat #1"
+                type:
+                  type: string
+                  enum:
+                    - Boat
+                    - Truck
+                    - Ambulance
+                    - Helicopter
+                    - Equipment
+                  example: "Boat"
+                capacity:
+                  type: integer
+                  example: 10
+              required:
+                - name
+                - type
+      responses:
+        "201":
+          description: Resource created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  resourceId:
+                    type: string
+                    example: "60d5ec49f1b2c8b1f8e4e1a6"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Forbidden - insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/resources/{id}:
+    patch:
+      tags:
+        - Resources
+      summary: Update resource
+      description: Update resource status (Manager only)
+      operationId: updateResource
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          description: Resource ID
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  type: string
+                  enum:
+                    - Available
+                    - In Use
+                    - Maintenance
+                    - Unavailable
+              required:
+                - status
+      responses:
+        "200":
+          description: Resource updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+        "403":
+          description: Forbidden - insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Resource not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/supplies:
+    get:
+      tags:
+        - Inventory
+      summary: List relief supplies
+      description: Get list of relief supplies inventory (Manager only)
+      operationId: listSupplies
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Supplies retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Supply"
+        "403":
+          description: Forbidden - insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/inventory/{id}:
+    patch:
+      tags:
+        - Inventory
+      summary: Update inventory
+      description: Update inventory quantity (Manager only)
+      operationId: updateInventory
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          description: Inventory item ID
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                quantity:
+                  type: integer
+                  example: 100
+              required:
+                - quantity
+      responses:
+        "200":
+          description: Inventory updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+        "403":
+          description: Forbidden - insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Inventory item not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/relief-distributions:
+    post:
+      tags:
+        - Inventory
+      summary: Distribute relief supplies
+      description: Distribute relief supplies to a mission (Manager only)
+      operationId: distributeSupplies
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                missionId:
+                  type: string
+                  example: "60d5ec49f1b2c8b1f8e4e1a4"
+                supplyId:
+                  type: string
+                  example: "60d5ec49f1b2c8b1f8e4e1a7"
+                quantity:
+                  type: integer
+                  example: 50
+              required:
+                - missionId
+                - supplyId
+                - quantity
+      responses:
+        "200":
+          description: Supplies distributed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+        "400":
+          description: Invalid input or insufficient inventory
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Forbidden - insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/inventory/allocate:
+    post:
+      tags:
+        - Inventory
+      summary: Allocate supply to a mission
+      description: Allocate a specific supply from a warehouse to a mission (Manager only). This reserves the quantity in the warehouse and updates the MissionSupply record.
+      operationId: allocateSupply
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AllocateSupplyInput"
+      responses:
+        "200":
+          description: Supply allocated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MissionSupply"
+        "400":
+          description: Invalid input, mission supply not in REQUESTED status, or insufficient available quantity.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Forbidden - Manager only
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Mission supply requirement or inventory not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/notifications/me:
+    get:
+      tags:
+        - Notifications
+      summary: Get my notifications
+      description: |
+        Get notifications for the currently authenticated user (userId taken from JWT token).
+        Supports pagination, filtering by read status & type, and sort direction.
+      operationId: getMyNotifications
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          description: Page number (default 1)
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          description: Items per page (default 10)
+          schema:
+            type: integer
+            default: 10
+        - name: isRead
+          in: query
+          description: |
+            Filter by read status.
+            `true` → only read notifications.
+            `false` → only unread notifications.
+            Omit to return all.
+          schema:
+            type: boolean
+          example: false
+        - name: type
+          in: query
+          description: Filter by notification type
+          schema:
+            type: string
+            enum:
+              - SUBMITTED
+              - ACCEPTED
+              - REJECTED
+              - IN_PROGRESS
+              - COMPLETED
+              - CANCELLED
+              - WITHDRAWN
+        - name: sortOrder
+          in: query
+          description: Sort direction by `createdAt` (default `desc` = newest first)
+          schema:
+            type: string
+            enum:
+              - asc
+              - desc
+            default: desc
+      responses:
+        "200":
+          description: Notifications retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Notifications fetched successfully
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Notification"
+                  meta:
+                    $ref: "#/components/schemas/Pagination"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/notifications/{userId}:
+    get:
+      tags:
+        - Notifications
+      summary: Get notifications by user ID
+      description: |
+        Get notifications for a specific user by their ID.
+        Requires the caller to have an appropriate role.
+        For the authenticated user's own notifications, prefer `GET /api/notifications/me`.
+      operationId: getNotificationsByUser
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: userId
+          in: path
+          description: Target user's MongoDB ObjectId
+          required: true
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+      responses:
+        "200":
+          description: Notifications retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Notification"
+                  meta:
+                    $ref: "#/components/schemas/Pagination"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/notifications/detail/{notificationId}:
+    get:
+      tags:
+        - Notifications
+      summary: Get notification detail
+      description: Get a single notification by its ID.
+      operationId: getNotificationById
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: notificationId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Notification retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: "#/components/schemas/Notification"
+        "404":
+          description: Notification not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/notifications/read/{notificationId}:
+    patch:
+      tags:
+        - Notifications
+      summary: Mark notification as read
+      description: Mark a single notification as read (`isRead = true`).
+      operationId: markNotificationAsRead
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: notificationId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Notification marked as read
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: "#/components/schemas/Notification"
+        "404":
+          description: Notification not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/notifications/{notificationId}:
+    delete:
+      tags:
+        - Notifications
+      summary: Delete a notification
+      description: Delete a single notification by its ID.
+      operationId: deleteNotification
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: notificationId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Notification deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Notification deleted successfully
+        "404":
+          description: Notification not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/notifications/user/{userId}:
+    delete:
+      tags:
+        - Notifications
+      summary: Delete all notifications for a user
+      description: Delete all notifications belonging to the specified user.
+      operationId: deleteAllNotificationsByUser
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: All notifications deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      deletedCount:
+                        type: integer
+                        example: 5
+                      message:
+                        type: string
+                        example: 5 notifications deleted
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/users:
+    get:
+      tags:
+        - Admin
+      summary: List users
+      description: |
+        Get list of users with pagination, filtering, and search.
+        - **Admin**: sees all users.
+        - **Rescue Coordinator**: sees only Citizen & Rescue Team (data scope enforced server-side).
+        If Coordinator filters by a role outside their scope (e.g. `?role=Admin`), returns empty result.
+      operationId: listUsers
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: role
+          in: query
+          description: "Filter by user role. Coordinator can only filter: Citizen, Rescue Team."
+          required: false
+          schema:
+            type: string
+            enum:
+              - Citizen
+              - Rescue Team
+              - Rescue Coordinator
+              - Manager
+              - Admin
+        - name: isActive
+          in: query
+          description: Filter by active status
+          required: false
+          schema:
+            type: boolean
+        - name: search
+          in: query
+          description: Search by displayName, phoneNumber, or email (case-insensitive)
+          required: false
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 100
+        - name: page
+          in: query
+          description: Page number
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+        - name: limit
+          in: query
+          description: Items per page
+          schema:
+            type: integer
+            default: 10
+            minimum: 1
+            maximum: 100
+        - name: sort
+          in: query
+          description: "Sort fields (comma-separated). Prefix with `-` for DESC. Example: `-createdAt,displayName`"
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Users retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserListResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Forbidden - insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/users/{id}/role:
+    patch:
+      tags:
+        - Admin
+      summary: Update user role
+      description: |
+        Update user role (Admin only).
+        - Admin cannot change their own role (returns 403).
+        - Target user must exist (returns 404).
+        - New role must differ from current role (returns 400).
+      operationId: updateUserRole
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          description: Target user ID (MongoDB ObjectId)
+          required: true
+          schema:
+            type: string
+            pattern: "^[0-9a-fA-F]{24}$"
+            example: "60d5ec49f1b2c8b1f8e4e1a1"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateUserRoleInput"
+      responses:
+        "200":
+          description: User role updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: 'User role updated to "Rescue Team" successfully'
+                  data:
+                    $ref: "#/components/schemas/User"
+        "400":
+          description: Bad request - validation error or role unchanged
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Forbidden - insufficient permissions or self-role-change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/system/categories:
+    get:
+      tags:
+        - System
+      summary: Get system categories
+      description: Get system configuration and categories (Admin only)
+      operationId: getSystemCategories
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Categories retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Category"
+        "403":
+          description: Forbidden - insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/reports/summary:
+    get:
+      tags:
+        - Reports
+      summary: Get summary report
+      description: Get summary statistics and reports (Admin/Manager only)
+      operationId: getSummaryReport
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Report retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SummaryReport"
+        "403":
+          description: Forbidden - insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/reports/export:
+    get:
+      tags:
+        - Reports
+      summary: Export report
+      description: Export report to CSV file (Admin only)
+      operationId: exportReport
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: startDate
+          in: query
+          description: Report start date
+          schema:
+            type: string
+            format: date
+        - name: endDate
+          in: query
+          description: Report end date
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: Report exported successfully
+          content:
+            text/csv:
+              schema:
+                type: string
+                format: binary
+        "403":
+          description: Forbidden - insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/teams:
+    get:
+      tags:
+        - Teams
+      summary: List all teams
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 10
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [AVAILABLE, BUSY]
+        - in: query
+          name: name
+          description: Search team by name (case-insensitive, partial match)
+          schema:
+            type: string
+        - in: query
+          name: sortBy
+          description: "Field to sort by"
+          schema:
+            type: string
+            enum: [name, status, createdAt, active, leader]
+            default: createdAt
+        - in: query
+          name: active
+          description: Filter by exact active member count (`memberStats.active`)
+          schema:
+            type: integer
+            minimum: 0
+        - in: query
+          name: leader
+          description: Filter by leader display name (case-insensitive). Teams without leader are excluded when this filter is present.
+          schema:
+            type: string
+        - in: query
+          name: order
+          description: "Sort order"
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: desc
+      responses:
+        "200":
+          description: Successful operation. Each team item includes `teamLeader` and `memberStats`.
+    post:
+      tags:
+        - Teams
+      summary: Create a new team
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+              properties:
+                name:
+                  type: string
+                leaderId:
+                  type: string
+                  description: Optional. If omitted, team is created without a leader.
+      responses:
+        "201":
+          description: Team created successfully
+
+  /api/teams/{teamId}:
+    get:
+      tags:
+        - Teams
+      summary: Get team details
+      description: |
+        Get detailed information about a team including its members.
+
+        **Access:**
+        - Rescue Coordinator / Admin: any team
+        - Rescue Team: only if user is a member of this team
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: teamId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Successful operation with team `members`, `teamLeader`, and `memberStats`.
+        "403":
+          description: Not a member of this team
+    patch:
+      tags:
+        - Teams
+      summary: Update team details
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: teamId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                leaderId:
+                  type: string
+                status:
+                  type: string
+                  enum: [AVAILABLE, BUSY]
+      responses:
+        "200":
+          description: Team updated successfully
+    delete:
+      tags:
+        - Teams
+      summary: Delete team
+      description: |
+        Delete a team permanently.
+
+        **Pre-conditions (all must be met):**
+        - Team status must be `AVAILABLE` (not `BUSY`)
+        - No active timelines (`ASSIGNED`, `EN_ROUTE`, `ON_SITE`) referencing this team
+        - Team must have no members (remove all members first)
+
+        **Access:** Rescue Coordinator / Admin only
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: teamId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Team deleted successfully
+        "400":
+          description: Cannot delete — team is BUSY, has active timelines, or still has members
+
+  /api/teams/{teamId}/leader:
+    patch:
+      tags:
+        - Teams
+      summary: Change team leader
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: teamId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - newLeaderId
+              properties:
+                newLeaderId:
+                  type: string
+      responses:
+        "200":
+          description: Team leader updated successfully
+
+  /api/teams/{teamId}/members:
+    post:
+      tags:
+        - Teams
+      summary: Add member to team
+      description: |
+        Add a user to the team. The target user must have role "Citizen" and not belong to any team.
+        After adding, the user's role is automatically upgraded to "Rescue Team".
+
+        **Access:**
+        - Rescue Coordinator / Admin: any team
+        - Rescue Team: only if user is the leader of this team
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: teamId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - userId
+              properties:
+                userId:
+                  type: string
+      responses:
+        "201":
+          description: Member added successfully
+        "400":
+          description: User is not a Citizen or already belongs to a team
+        "403":
+          description: Only the team leader can perform this action
+
+  /api/teams/{teamId}/members/{userId}:
+    delete:
+      tags:
+        - Teams
+      summary: Remove member from team
+      description: |
+        Remove a member from the team.
+
+        **Constraints:**
+        - Cannot remove yourself
+        - Cannot remove the team leader (must change leader first)
+
+        **Access:**
+        - Rescue Coordinator / Admin: any team
+        - Rescue Team: only if user is the leader of this team
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: teamId
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: userId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Member removed successfully
+        "400":
+          description: Cannot remove yourself or the team leader
+        "403":
+          description: Only the team leader can perform this action
+
+  /api/team-applications:
+    post:
+      tags:
+        - Teams
+      summary: Submit rescue team application
+      description: Citizen submits an application to become Rescue Team. `confirmPhoneNumber` falls back to the current profile phone if omitted.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTeamApplicationRequest"
+      responses:
+        "201":
+          description: Application submitted successfully
+    get:
+      tags:
+        - Teams
+      summary: List all rescue team applications
+      description: Coordinator/Admin lists applications with pagination and optional status filtering.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 10
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [PENDING, APPROVED, REJECTED, WITHDRAWN]
+      responses:
+        "200":
+          description: Applications retrieved successfully
+
+  /api/team-applications/my:
+    get:
+      tags:
+        - Teams
+      summary: List my rescue team applications
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 10
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [PENDING, APPROVED, REJECTED, WITHDRAWN]
+      responses:
+        "200":
+          description: User application history retrieved successfully
+
+  /api/team-applications/{applicationId}:
+    get:
+      tags:
+        - Teams
+      summary: Get rescue team application detail
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: applicationId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Application retrieved successfully
+
+  /api/team-applications/{applicationId}/withdraw:
+    patch:
+      tags:
+        - Teams
+      summary: Withdraw rescue team application
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: applicationId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Application withdrawn successfully
+
+  /api/team-applications/{applicationId}/approve:
+    patch:
+      tags:
+        - Teams
+      summary: Approve rescue team application
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: applicationId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Application approved successfully
+
+  /api/team-applications/{applicationId}/reject:
+    patch:
+      tags:
+        - Teams
+      summary: Reject rescue team application
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: applicationId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RejectTeamApplicationRequest"
+      responses:
+        "200":
+          description: Application rejected successfully
+
+  /api/timelines:
+    get:
+      tags:
+        - Timelines
+      summary: List timelines
+      description: List timelines with filters and pagination
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: missionId
+          schema:
+            type: string
+        - in: query
+          name: teamId
+          schema:
+            type: string
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum:
+              - PLANNED
+              - ASSIGNED
+              - EN_ROUTE
+              - ON_SITE
+              - COMPLETED
+              - PARTIAL
+              - FAILED
+              - WITHDRAWN
+              - CANCELLED
+        - in: query
+          name: page
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 10
+      responses:
+        "200":
+          description: Timelines retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Timeline"
+                  meta:
+                    $ref: "#/components/schemas/Pagination"
+
+  /api/timelines/{id}:
+    get:
+      tags:
+        - Timelines
+      summary: Get timeline detail
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Timeline retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    $ref: "#/components/schemas/Timeline"
+
+  /api/timelines/{id}/accept:
+    patch:
+      tags:
+        - Timelines
+      summary: Team accepts assigned timeline
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Timeline accepted successfully
+
+  /api/timelines/{id}/arrive:
+    patch:
+      tags:
+        - Timelines
+      summary: Team marks timeline as ON_SITE
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Timeline marked ON_SITE successfully
+
+  /api/timelines/{id}/complete:
+    post:
+      tags:
+        - Timelines
+      summary: Complete timeline with auto-calculated outcome
+      description: |
+        **UNIFIED API** - Automatically calculates timeline outcome based on completed TeamRequests.
+        
+        **Outcome Logic:**
+        - Has completed TeamRequests with all COMPLETED → Timeline COMPLETED
+        - Has completed TeamRequests with any PARTIAL → Timeline PARTIAL
+        - Has TeamRequests but none completed → Timeline WITHDRAWN
+        - No TeamRequests (mission not started) → Error 400
+        
+        **Idempotent:** Returns 200 OK even if timeline already completed (auto-complete or previous call).
+        
+        **Breaking Change:** 
+        - Method changed from PATCH to POST
+        - No longer requires `outcome` field in request body (auto-calculated)
+        - Old PATCH endpoint is deprecated
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: Timeline ID
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TimelineCompleteAutoInput"
+      responses:
+        "200":
+          description: Timeline completed successfully or already completed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: "#/components/schemas/Timeline"
+                  message:
+                    type: string
+                    enum:
+                      - "Timeline completed successfully"
+                      - "Timeline đã được hoàn tất trước đó"
+                    description: Different message for new completion vs already completed
+        "400":
+          description: Invalid state or mission not started
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+              examples:
+                notOnSite:
+                  value:
+                    success: false
+                    message: "Timeline phải ở trạng thái ON_SITE mới có thể complete. Trạng thái hiện tại: ASSIGNED"
+                    errorCode: "TIMELINE_NOT_ON_SITE"
+                noTeamRequests:
+                  value:
+                    success: false
+                    message: "Không thể complete timeline khi mission chưa start (chưa có TeamRequest)"
+                    errorCode: "NO_TEAM_REQUESTS_FOUND"
+        "403":
+          description: User not in team
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /api/timelines/{id}/fail:
+    patch:
+      tags:
+        - Timelines
+      summary: Mark timeline as FAILED
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TimelineFailInput"
+      responses:
+        "200":
+          description: Timeline marked failed successfully
+
+  /api/timelines/{id}/withdraw:
+    patch:
+      tags:
+        - Timelines
+      summary: Team withdraws assigned timeline
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TimelineWithdrawInput"
+      responses:
+        "200":
+          description: Timeline withdrawn successfully
+
+  /api/timelines/{id}/cancel:
+    patch:
+      tags:
+        - Timelines
+      summary: Coordinator cancels assigned timeline
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TimelineCancelInput"
+      responses:
+        "200":
+          description: Timeline cancelled successfully
+
+  /api/timeline-supplies/claim:
+    post:
+      tags:
+        - Timeline Supplies
+      summary: Claim allocated supplies for a team
+      description: Rescue Teams claim requested quantities from the mission's total allocated supplies (Rescue Team only). This updates both TimelineSupply and MissionSupply, and deducts from actual inventory.
+      operationId: claimSupply
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ClaimSupplyInput"
+      responses:
+        "201":
+          description: Supply claimed successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TimelineSupply"
+        "400":
+          description: Invalid input or trying to claim more than allocated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Forbidden - Rescue Team only
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Mission supply or timeline not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/timeline-supplies/return:
+    post:
+      tags:
+        - Timeline Supplies
+      summary: Return leftover supplies
+      description: Rescue Teams return the remaining supplies after finishing mission tasks (Rescue Team only). Returns the quantity calculated as (carriedQty - totalDistributed).
+      operationId: returnSupply
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReturnSupplyInput"
+      responses:
+        "200":
+          description: Supply returned successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Supply returned successfully"
+                  data:
+                    $ref: "#/components/schemas/TimelineSupply"
+        "400":
+          description: Invalid input or supply already returned.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Forbidden - Rescue Team only
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Timeline supply record not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+
+components:
+  schemas:
+    RegisterRequest:
+      type: object
+      required:
+        - userName
+        - displayName
+        - email
+        - phoneNumber
+        - password
+      properties:
+        userName:
+          type: string
+          minLength: 3
+          maxLength: 50
+          example: "nguyenvana"
+        displayName:
+          type: string
+          minLength: 2
+          maxLength: 100
+          example: "Nguyen Van A"
+        email:
+          type: string
+          format: email
+          example: "nguyenvana@example.com"
+        phoneNumber:
+          type: string
+          pattern: "^[0-9]{10,11}$"
+          example: "0901234567"
+          description: "Required phone number (10-11 digits)"
+        password:
+          type: string
+          minLength: 6
+          maxLength: 100
+          example: "password123"
+        role:
+          type: string
+          enum:
+            - Citizen
+            - Rescue Team
+            - Rescue Coordinator
+            - Manager
+            - Admin
+          default: Citizen
+
+    LoginRequest:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+          example: "nguyenvana@example.com"
+        password:
+          type: string
+          example: "password123"
+
+    LoginResponse:
+      type: object
+      properties:
+        accessToken:
+          type: string
+          example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+        user:
+          $ref: "#/components/schemas/User"
+
+    AuthRegisterResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "Đăng ký thành công"
+        data:
+          type: object
+          properties:
+            message:
+              type: string
+              example: "Đăng ký thành công"
+            userId:
+              type: string
+              example: "60d5ec49f1b2c8b1f8e4e1a1"
+
+    AuthLoginResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "Đăng nhập thành công"
+        data:
+          type: object
+          properties:
+            accessToken:
+              type: string
+              example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+            user:
+              $ref: "#/components/schemas/User"
+
+    AuthRefreshResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "Refresh token thành công"
+        data:
+          type: object
+          properties:
+            accessToken:
+              type: string
+              example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+            user:
+              $ref: "#/components/schemas/User"
+
+    AuthMeResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "Success"
+        data:
+          $ref: "#/components/schemas/User"
+
+    User:
+      type: object
+      properties:
+        _id:
+          type: string
+          example: "60d5ec49f1b2c8b1f8e4e1a1"
+        userName:
+          type: string
+          example: "nguyenvana"
+        displayName:
+          type: string
+          example: "Nguyen Van A"
+        email:
+          type: string
+          example: "nguyenvana@example.com"
+        phoneNumber:
+          type: string
+          example: "0901234567"
+        avatarUrl:
+          type: string
+          example: "https://cloudinary.com/avatar.jpg"
+        avatarId:
+          type: string
+          example: "avatar_public_id"
+        isActive:
+          type: boolean
+          example: true
+        role:
+          type: string
+          enum:
+            - Citizen
+            - Rescue Team
+            - Rescue Coordinator
+            - Manager
+            - Admin
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CreateRescueTeamRequest:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          minLength: 3
+          maxLength: 100
+          example: "Team Alpha"
+        status:
+          type: string
+          enum:
+            - Active
+            - Offline
+            - Busy
+          default: Active
+
+    AddTeamMemberRequest:
+      type: object
+      required:
+        - userId
+      properties:
+        userId:
+          type: string
+          example: "507f1f77bcf86cd799439011"
+
+    CreateTeamApplicationRequest:
+      type: object
+      required:
+        - motivation
+      properties:
+        motivation:
+          type: string
+          example: "I want to support flood rescue operations in my district."
+        confirmPhoneNumber:
+          type: string
+          example: "0909000111"
+
+    RejectTeamApplicationRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          example: "Chưa đủ thông tin để đánh giá ở thời điểm hiện tại."
+
+    TeamApplication:
+      type: object
+      properties:
+        _id:
+          type: string
+        status:
+          type: string
+          enum: [PENDING, APPROVED, REJECTED, WITHDRAWN]
+        motivation:
+          type: string
+        submittedPhoneNumber:
+          type: string
+        rejectionReason:
+          type: string
+          nullable: true
+        userId:
+          $ref: "#/components/schemas/User"
+        reviewedBy:
+          $ref: "#/components/schemas/User"
+        reviewedAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CreateRequestInput:
+      type: object
+      required:
+        - type
+        - location
+        - description
+      properties:
+        type:
+          type: string
+          enum:
+            - Rescue
+            - Relief
+          description: Type of request - Rescue or Relief
+          example: Rescue
+        incidentType:
+          type: string
+          enum:
+            - Flood
+            - Trapped
+            - Injured
+            - Landslide
+            - Other
+          description: Type of incident
+          default: Other
+          example: Flood
+        location:
+          $ref: "#/components/schemas/GeoPoint"
+        description:
+          type: string
+          minLength: 10
+          maxLength: 500
+          description: Detailed description of the situation
+          example: "Trapped in flooded house on second floor, water rising quickly. 3 people including 1 elderly person."
+        peopleCount:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 1
+          description: Number of people affected
+          example: 3
+        requestSupplies:
+          type: array
+          items:
+            $ref: "#/components/schemas/RequestSupplyItem"
+          description: List of requested supplies
+          example:
+            - supplyId: "60d5ec49f1b2c8b1f8e4e1a7"
+              requestedQty: 2
+        imageUrls:
+          type: array
+          items:
+            type: string
+            format: uri
+          maxItems: 5
+          description: URLs of images showing the situation (max 5)
+          example:
+            ["https://example.com/image1.jpg", "https://example.com/image2.jpg"]
+
+    GeoPoint:
+      type: object
+      required:
+        - type
+        - coordinates
+      properties:
+        type:
+          type: string
+          enum:
+            - Point
+          default: Point
+          example: Point
+        coordinates:
+          type: array
+          minItems: 2
+          maxItems: 2
+          items:
+            type: number
+          example: [106.660172, 10.762622]
+
+    RequestSupplyItem:
+      type: object
+      required:
+        - supplyId
+        - requestedQty
+      properties:
+        supplyId:
+          type: string
+          example: "60d5ec49f1b2c8b1f8e4e1a7"
+        requestedQty:
+          type: integer
+          minimum: 1
+          example: 2
+
+    Request:
+      type: object
+      properties:
+        _id:
+          type: string
+          example: "60d5ec49f1b2c8b1f8e4e1a3"
+        userName:
+          type: string
+          description: Name of the requester
+          example: "Nguyen Van A"
+        userId:
+          type: string
+          nullable: true
+          description: ID of the citizen user (null for unregistered citizens)
+          example: "60d5ec49f1b2c8b1f8e4e1a1"
+        createdBy:
+          type: string
+          description: ID of the user who created this request
+          example: "60d5ec49f1b2c8b1f8e4e1a1"
+        source:
+          type: string
+          enum:
+            - CITIZEN
+            - COORDINATOR
+          description: Origin of the request
+          example: CITIZEN
+        phoneNumber:
+          type: string
+          nullable: true
+          description: Phone number of the requester
+          example: "0901234567"
+        type:
+          type: string
+          enum:
+            - Rescue
+            - Relief
+          example: Rescue
+        incidentType:
+          type: string
+          enum:
+            - Flood
+            - Trapped
+            - Injured
+            - Landslide
+            - Other
+          example: Flood
+        location:
+          $ref: "#/components/schemas/GeoPoint"
+        description:
+          type: string
+          example: "Trapped in flooded house on second floor"
+        peopleCount:
+          type: integer
+          minimum: 1
+          maximum: 100
+          example: 3
+        priority:
+          type: string
+          enum:
+            - Critical
+            - High
+            - Normal
+          example: High
+        status:
+          type: string
+          enum:
+            - SUBMITTED
+            - VERIFIED
+            - REJECTED
+            - IN_PROGRESS
+            - PARTIALLY_FULFILLED
+            - FULFILLED
+            - CLOSED
+            - CANCELLED
+          example: SUBMITTED
+        requestSupplies:
+          type: array
+          items:
+            $ref: "#/components/schemas/RequestSupplyItem"
+        media:
+          type: array
+          items:
+            type: object
+            properties:
+              imageUrl:
+                type: string
+                format: uri
+                example: "https://example.com/image.jpg"
+              description:
+                type: string
+              uploadedAt:
+                type: string
+                format: date-time
+        isDuplicated:
+          type: boolean
+          default: false
+        duplicatedOfRequestId:
+          type: string
+          nullable: true
+        isLocationVerified:
+          type: boolean
+          default: false
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CreateRequestOnBehalfInput:
+      type: object
+      required:
+        - type
+        - location
+        - description
+      properties:
+        citizenId:
+          type: string
+          description: ID of an existing citizen user. If provided, userName and phoneNumber are forbidden.
+          example: "60d5ec49f1b2c8b1f8e4e1a1"
+        userName:
+          type: string
+          minLength: 2
+          maxLength: 100
+          description: Required when citizenId is not provided
+          example: "Tran Van B"
+        phoneNumber:
+          type: string
+          pattern: "^[0-9]{10,11}$"
+          description: Required when citizenId is not provided
+          example: "0987654321"
+        type:
+          type: string
+          enum:
+            - Rescue
+            - Relief
+          example: Rescue
+        incidentType:
+          type: string
+          enum:
+            - Flood
+            - Trapped
+            - Injured
+            - Landslide
+            - Other
+          default: Other
+        location:
+          $ref: "#/components/schemas/GeoPoint"
+        description:
+          type: string
+          minLength: 10
+          maxLength: 500
+          example: "Citizen called via hotline, trapped on rooftop."
+        peopleCount:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 1
+        priority:
+          type: string
+          enum:
+            - Critical
+            - High
+            - Normal
+          default: Normal
+          description: Coordinator can set priority at creation
+        requestSupplies:
+          type: array
+          items:
+            $ref: "#/components/schemas/RequestSupplyItem"
+        imageUrls:
+          type: array
+          items:
+            type: string
+            format: uri
+          maxItems: 5
+
+    RequestResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "Request created successfully"
+        data:
+          $ref: "#/components/schemas/Request"
+
+    RequestListResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "Success"
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Request"
+        meta:
+          $ref: "#/components/schemas/Pagination"
+
+    SearchCitizensResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "Success"
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/User"
+
+    UserListResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "Users retrieved successfully"
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/User"
+        meta:
+          $ref: "#/components/schemas/Pagination"
+
+    UpdateUserRoleInput:
+      type: object
+      required:
+        - role
+      properties:
+        role:
+          type: string
+          description: "New role to assign to the user"
+          enum:
+            - Citizen
+            - Rescue Team
+            - Rescue Coordinator
+            - Manager
+            - Admin
+          example: "Rescue Team"
+
+    VerifyRequestInput:
+      type: object
+      required:
+        - approved
+      properties:
+        approved:
+          type: boolean
+          example: true
+        priority:
+          type: string
+          enum:
+            - Critical
+            - High
+            - Normal
+          description: Required only when approved is true
+          example: High
+        reason:
+          type: string
+          maxLength: 500
+          description: Required only when approved is false
+          example: "Duplicate request"
+
+    CancelRequestInput:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 500
+          example: "Resolved already"
+
+    MarkDuplicateInput:
+      type: object
+      required:
+        - duplicatedOfRequestId
+      properties:
+        duplicatedOfRequestId:
+          type: string
+          example: "60d5ec49f1b2c8b1f8e4e1a3"
+
+    UpdateLocationInput:
+      type: object
+      required:
+        - location
+      properties:
+        location:
+          $ref: "#/components/schemas/GeoPoint"
+        isLocationVerified:
+          type: boolean
+          default: true
+          example: true
+
+    UpdatePriorityInput:
+      type: object
+      required:
+        - priority
+      properties:
+        priority:
+          type: string
+          enum:
+            - Critical
+            - High
+            - Normal
+          example: High
+
+    CreateMissionInput:
+      type: object
+      required:
+        - name
+        - type
+      properties:
+        name:
+          type: string
+          minLength: 3
+          maxLength: 200
+          example: "Rescue operation - District 9 flooding"
+        type:
+          type: string
+          enum: [RESCUE, RELIEF]
+          example: RESCUE
+        description:
+          type: string
+          maxLength: 1000
+          example: "Multiple households trapped due to flash flood"
+        priority:
+          type: string
+          enum: [Critical, High, Normal]
+          default: Normal
+          example: High
+
+    UpdateMissionInput:
+      type: object
+      description: At least one field required. Status cannot be updated here.
+      minProperties: 1
+      properties:
+        name:
+          type: string
+          minLength: 3
+          maxLength: 200
+        description:
+          type: string
+          maxLength: 1000
+        priority:
+          type: string
+          enum: [Critical, High, Normal]
+
+    MissionAddRequestsInput:
+      type: object
+      required:
+        - requestIds
+      properties:
+        requestIds:
+          type: array
+          minItems: 1
+          items:
+            type: string
+          example:
+            - "60d5ec49f1b2c8b1f8e4e1a3"
+            - "60d5ec49f1b2c8b1f8e4e1a4"
+        note:
+          type: string
+          maxLength: 500
+          nullable: true
+          example: "Ưu tiên cứu hộ khu vực ngập sâu"
+
+    MissionAddTeamsInput:
+      type: object
+      required:
+        - teamIds
+      properties:
+        teamIds:
+          type: array
+          minItems: 1
+          items:
+            type: string
+          example:
+            - "60d5ec49f1b2c8b1f8e4e1a2"
+            - "60d5ec49f1b2c8b1f8e4e1a5"
+        note:
+          type: string
+          maxLength: 500
+          nullable: true
+
+    StartMissionInput:
+      type: object
+      properties:
+        note:
+          type: string
+          maxLength: 500
+          nullable: true
+
+    MissionRequestActionInput:
+      type: object
+      properties:
+        note:
+          type: string
+          maxLength: 500
+          nullable: true
+
+    MissionRequestProgressInput:
+      type: object
+      description: At least one field is required.
+      properties:
+        peopleRescuedIncrement:
+          type: integer
+          minimum: 1
+        suppliesDelivered:
+          type: array
+          items:
+            $ref: "#/components/schemas/TeamRequestSupplyItem"
+      anyOf:
+        - required: [peopleRescuedIncrement]
+        - required: [suppliesDelivered]
+
+    TeamRequestSupplyItem:
+      type: object
+      required:
+        - name
+        - deliveredQty
+      properties:
+        name:
+          type: string
+          example: Water
+        deliveredQty:
+          type: number
+          minimum: 0
+          exclusiveMinimum: true
+          example: 10
+
+    MissionRequest:
+      type: object
+      description: Aggregate MissionRequest fields are derived from TeamRequest contributions.
+      properties:
+        _id:
+          type: string
+          example: "65f1d2c3b4a5968776655777"
+        missionId:
+          type: string
+          example: "65f1d2c3b4a5968776655111"
+        requestId:
+          type: string
+          example: "65f1d2c3b4a5968776655222"
+        status:
+          type: string
+          enum:
+            - PENDING
+            - IN_PROGRESS
+            - PARTIAL
+            - FULFILLED
+            - CLOSED
+            - DROPPED
+        peopleNeeded:
+          type: integer
+          minimum: 0
+        peopleRescued:
+          type: integer
+          minimum: 0
+        peopleRemaining:
+          type: integer
+          minimum: 0
+        suppliesDelivered:
+          type: array
+          items:
+            $ref: "#/components/schemas/TeamRequestSupplyItem"
+        fulfillmentPercent:
+          type: number
+          minimum: 0
+          maximum: 100
+        handledByTeamIds:
+          type: array
+          items:
+            type: string
+        note:
+          type: string
+          nullable: true
+        closedAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    TeamRequest:
+      type: object
+      properties:
+        _id:
+          type: string
+          example: "65f1d2c3b4a5968776655aaa"
+        missionId:
+          type: string
+          example: "65f1d2c3b4a5968776655111"
+        missionRequestId:
+          type: string
+          example: "65f1d2c3b4a5968776655777"
+        teamId:
+          type: string
+          example: "65f1d2c3b4a5968776655333"
+        rescuedCountTotal:
+          type: integer
+          minimum: 0
+        suppliesDeliveredTotal:
+          type: array
+          items:
+            $ref: "#/components/schemas/TeamRequestSupplyItem"
+        lastUpdatedAt:
+          type: string
+          format: date-time
+          nullable: true
+        lastUpdatedBy:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    Mission:
+      type: object
+      properties:
+        _id:
+          type: string
+          example: "60d5ec49f1b2c8b1f8e4e1a4"
+        code:
+          type: string
+          description: Auto-generated code (e.g. MS-250225-001)
+          example: "MS-250225-001"
+        name:
+          type: string
+          example: "Rescue operation - District 9 flooding"
+        description:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum:
+            - DRAFT
+            - PLANNED
+            - IN_PROGRESS
+            - PAUSED
+            - PARTIAL
+            - COMPLETED
+            - ABORTED
+          example: DRAFT
+        priority:
+          type: string
+          enum: [Critical, High, Normal]
+          example: Normal
+        type:
+          type: string
+          enum: [RESCUE, RELIEF]
+          example: RESCUE
+        coordinatorId:
+          type: string
+          example: "60d5ec49f1b2c8b1f8e4e1a1"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    Position:
+      type: object
+      properties:
+        missionId:
+          type: string
+          example: "60d5ec49f1b2c8b1f8e4e1a4"
+        latitude:
+          type: number
+          format: double
+          example: 10.762622
+        longitude:
+          type: number
+          format: double
+          example: 106.660172
+        timestamp:
+          type: string
+          format: date-time
+
+    Resource:
+      type: object
+      properties:
+        _id:
+          type: string
+          example: "60d5ec49f1b2c8b1f8e4e1a6"
+        name:
+          type: string
+          example: "Rescue Boat #1"
+        type:
+          type: string
+          enum:
+            - Boat
+            - Truck
+            - Ambulance
+            - Helicopter
+            - Equipment
+        capacity:
+          type: integer
+          example: 10
+        status:
+          type: string
+          enum:
+            - Available
+            - In Use
+            - Maintenance
+            - Unavailable
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    Supply:
+      type: object
+      properties:
+        _id:
+          type: string
+          example: "60d5ec49f1b2c8b1f8e4e1a7"
+        name:
+          type: string
+          example: "Water Bottles"
+        quantity:
+          type: integer
+          example: 1000
+        unit:
+          type: string
+          example: "bottles"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    Notification:
+      type: object
+      properties:
+        _id:
+          type: string
+          example: "60d5ec49f1b2c8b1f8e4e1a8"
+        userId:
+          type: string
+        title:
+          type: string
+          example: "New Mission Assigned"
+        message:
+          type: string
+          example: "You have been assigned to Mission #123"
+        type:
+          type: string
+          enum:
+            - Info
+            - Warning
+            - Success
+            - Error
+        isRead:
+          type: boolean
+          default: false
+        createdAt:
+          type: string
+          format: date-time
+
+    Category:
+      type: object
+      properties:
+        _id:
+          type: string
+          example: "60d5ec49f1b2c8b1f8e4e1a9"
+        name:
+          type: string
+          example: "Emergency Types"
+        values:
+          type: array
+          items:
+            type: string
+
+    SummaryReport:
+      type: object
+      properties:
+        totalRequests:
+          type: integer
+          example: 150
+        pendingRequests:
+          type: integer
+          example: 20
+        completedMissions:
+          type: integer
+          example: 100
+        activeTeams:
+          type: integer
+          example: 10
+        totalResourcesUsed:
+          type: integer
+          example: 45
+
+    Pagination:
+      type: object
+      properties:
+        page:
+          type: integer
+          example: 1
+        limit:
+          type: integer
+          example: 20
+        total:
+          type: integer
+          example: 100
+        totalPages:
+          type: integer
+          example: 5
+
+    Timeline:
+      type: object
+      properties:
+        _id:
+          type: string
+          example: "65f1d2c3b4a5968776655443"
+        missionId:
+          type: string
+          example: "65f1d2c3b4a5968776655111"
+        teamId:
+          type: string
+          example: "65f1d2c3b4a5968776655333"
+        status:
+          type: string
+          enum:
+            - PLANNED
+            - ASSIGNED
+            - EN_ROUTE
+            - ON_SITE
+            - COMPLETED
+            - PARTIAL
+            - FAILED
+            - WITHDRAWN
+            - CANCELLED
+        assignedAt:
+          type: string
+          format: date-time
+        startedAt:
+          type: string
+          format: date-time
+          nullable: true
+        arrivedAt:
+          type: string
+          format: date-time
+          nullable: true
+        completedAt:
+          type: string
+          format: date-time
+          nullable: true
+        failureReason:
+          type: string
+          nullable: true
+        withdrawalReason:
+          type: string
+          nullable: true
+        note:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    TimelineCompleteInput:
+      type: object
+      deprecated: true
+      description: "DEPRECATED - Use TimelineCompleteAutoInput instead. Old PATCH endpoint is removed."
+      required:
+        - outcome
+      properties:
+        outcome:
+          type: string
+          enum:
+            - COMPLETED
+            - PARTIAL
+          description: "DEPRECATED - Outcome is now auto-calculated from TeamRequests"
+        note:
+          type: string
+          nullable: true
+          maxLength: 1000
+
+    TimelineCompleteAutoInput:
+      type: object
+      description: "Input for unified complete timeline API. Outcome is automatically calculated from TeamRequests."
+      properties:
+        note:
+          type: string
+          nullable: true
+          maxLength: 1000
+          description: "Optional completion note"
+          example: "Mission completed successfully"
+
+    TimelineFailInput:
+      type: object
+      required:
+        - failureReason
+      properties:
+        failureReason:
+          type: string
+        note:
+          type: string
+          nullable: true
+
+    TimelineWithdrawInput:
+      type: object
+      required:
+        - withdrawalReason
+      properties:
+        withdrawalReason:
+          type: string
+        note:
+          type: string
+          nullable: true
+
+    TimelineCancelInput:
+      type: object
+      properties:
+        note:
+          type: string
+          nullable: true
+
+    Error:
+      type: object
+      required:
+        - message
+      properties:
+        message:
+          type: string
+          example: "An error occurred"
+        code:
+          type: string
+          example: "ERROR_CODE"
+
+    ApiError:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        message:
+          type: string
+          example: "Lỗi khi đăng nhập"
+        data:
+          nullable: true
+          example: null
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+              example: "INTERNAL_ERROR"
+            details:
+              type: array
+              nullable: true
+              items:
+                type: object
+                properties:
+                  field:
+                    type: string
+                    example: "outcome"
+                  message:
+                    type: string
+                    example: "missionRequestId phải là ObjectId hợp lệ"
+                  type:
+                    type: string
+                    example: "string.pattern.base"
+
+    AllocateSupplyInput:
+      type: object
+      properties:
+        missionId:
+          type: string
+          description: ID of the mission
+          example: "60d5ec49f1b2c8b1f8e4e1a4"
+        supplyId:
+          type: string
+          description: ID of the supply type
+          example: "60d5ec49f1b2c8b1f8e4e1a7"
+        warehouseId:
+          type: string
+          description: ID of the source warehouse
+          example: "60d5ec49f1b2c8b1f8e4e1b1"
+        allocatedQty:
+          type: integer
+          description: Actual quantity to reserve for the mission
+          example: 50
+        note:
+          type: string
+          description: Optional allocation notes
+          example: "Allocated from Warehouse A for Mission Bravo"
+      required:
+        - missionId
+        - supplyId
+        - warehouseId
+        - allocatedQty
+
+    ClaimSupplyInput:
+      type: object
+      properties:
+        timelineId:
+          type: string
+          description: ID of the team's timeline record
+          example: "60d5ec49f1b2c8b1f8e4e1c1"
+        missionSupplyId:
+          type: string
+          description: ID of the mission supply requirement record
+          example: "60d5ec49f1b2c8b1f8e4e1d1"
+        carriedQty:
+          type: integer
+          description: Actual quantity the team is picking up
+          example: 20
+      required:
+        - timelineId
+        - missionSupplyId
+        - carriedQty
+
+    ReturnSupplyInput:
+      type: object
+      properties:
+        timelineId:
+          type: string
+          description: ID of the team's timeline record
+          example: "60d5ec49f1b2c8b1f8e4e1c1"
+        missionSupplyId:
+          type: string
+          description: ID of the mission supply requirement record
+          example: "60d5ec49f1b2c8b1f8e4e1d1"
+      required:
+        - timelineId
+        - missionSupplyId
+
+    MissionSupply:
+      type: object
+      properties:
+        _id:
+          type: string
+          example: "60d5ec49f1b2c8b1f8e4e1d1"
+        missionId:
+          type: string
+          example: "60d5ec49f1b2c8b1f8e4e1a4"
+        supplyId:
+          type: string
+          example: "60d5ec49f1b2c8b1f8e4e1a7"
+        warehouseId:
+          type: string
+          example: "60d5ec49f1b2c8b1f8e4e1b1"
+        plannedQty:
+          type: integer
+          example: 100
+        allocatedQty:
+          type: integer
+          example: 50
+        claimedQty:
+          type: integer
+          example: 20
+        status:
+          type: string
+          enum: [REQUESTED, ALLOCATED, FULLY_CLAIMED, RETURNED]
+        allocatedBy:
+          type: string
+          example: "60d5ec49f1b2c8b1f8e4e1f1"
+        allocatedAt:
+          type: string
+          format: date-time
+        note:
+          type: string
+
+    TimelineSupply:
+      type: object
+      properties:
+        _id:
+          type: string
+          example: "60d5ec49f1b2c8b1f8e4e1e1"
+        timelineId:
+          type: string
+          example: "60d5ec49f1b2c8b1f8e4e1c1"
+        missionSupplyId:
+          type: string
+          example: "60d5ec49f1b2c8b1f8e4e1d1"
+        carriedQty:
+          type: integer
+          example: 20
+        returnedQty:
+          type: integer
+          example: 5
+        status:
+          type: string
+          enum: [CLAIMED, RETURNED]
+        claimedAt:
+          type: string
+          format: date-time
+        returnedAt:
+          type: string
+          format: date-time
+
+  securitySchemes:
+
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: "JWT token authentication. Format: `Bearer <token>`"
