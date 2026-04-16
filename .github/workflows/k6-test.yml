@@ -38,8 +38,8 @@ jobs:
           JWT_SECRET: k6_github_actions_secret_key
         run: |
           npm start &
-          # Cài wait-on để đảm bảo server khởi động xong mới chạy test
-          npx wait-on http://localhost:8080/api/users --timeout 30000
+          # Cài wait-on để đảm bảo server khởi động xong tcp port trước khi test
+          npx wait-on tcp:localhost:8080 --timeout 30000
 
       - name: Seed Database for k6
         env:
