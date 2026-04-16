@@ -110,10 +110,9 @@ export default function () {
 
   // ── Step 2: Get Me (Profile) ───────────────────────────
   group("Step 2: Get Me", function () {
-    const res = http.get(`${BASE_URL}/api/auth/me`, {
-      ...authHeaders,
+    const res = http.get(`${BASE_URL}/api/auth/me`, Object.assign({}, authHeaders, {
       tags: { name: "GET /api/auth/me" },
-    });
+    }));
 
     getMeStepDuration.add(res.timings.duration);
 
@@ -139,10 +138,9 @@ export default function () {
 
   // ── Step 3: Get My Requests ────────────────────────────
   group("Step 3: Get My Requests", function () {
-    const res = http.get(`${BASE_URL}/api/requests/my?page=1&limit=10`, {
-      ...authHeaders,
+    const res = http.get(`${BASE_URL}/api/requests/my?page=1&limit=10`, Object.assign({}, authHeaders, {
       tags: { name: "GET /api/requests/my" },
-    });
+    }));
 
     getRequestsStepDuration.add(res.timings.duration);
 
