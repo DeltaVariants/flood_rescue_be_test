@@ -110,7 +110,7 @@ export default function (data) {
       try {
         const body = JSON.parse(r.body);
         return body.data !== undefined && Array.isArray(body.data);
-      } catch {
+      } catch (e) {
         return false;
       }
     },
@@ -118,7 +118,7 @@ export default function (data) {
       try {
         const body = JSON.parse(r.body);
         return body.meta && body.meta.total !== undefined;
-      } catch {
+      } catch (e) {
         return false;
       }
     },

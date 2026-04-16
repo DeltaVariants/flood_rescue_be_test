@@ -78,7 +78,7 @@ export default function () {
         try {
           const body = JSON.parse(r.body);
           return body.data && body.data.accessToken !== undefined;
-        } catch {
+        } catch (e) {
           return false;
         }
       },
@@ -123,7 +123,7 @@ export default function () {
         try {
           const body = JSON.parse(r.body);
           return body.data && body.data.email !== undefined;
-        } catch {
+        } catch (e) {
           return false;
         }
       },
@@ -152,7 +152,7 @@ export default function () {
         try {
           const body = JSON.parse(r.body);
           return body.data !== undefined;
-        } catch {
+        } catch (e) {
           return false;
         }
       },
