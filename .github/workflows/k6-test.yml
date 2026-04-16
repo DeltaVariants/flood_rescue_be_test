@@ -34,7 +34,7 @@ jobs:
       - name: Start Backend Server (Background)
         env:
           PORT: 8080
-          MONGO_URI: mongodb://localhost:27017/flood_rescue_test
+          MONGODB_URI: mongodb://localhost:27017/flood_rescue_test
           JWT_SECRET: k6_github_actions_secret_key
         run: |
           npm start &
@@ -43,7 +43,7 @@ jobs:
 
       - name: Seed Database for k6
         env:
-          MONGO_URI: mongodb://localhost:27017/flood_rescue_test
+          MONGODB_URI: mongodb://localhost:27017/flood_rescue_test
         run: node tests/k6/seed-k6-data.js
 
       - name: Run Scenario 1 - Login API
