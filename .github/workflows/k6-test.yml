@@ -1,0 +1,71 @@
+name: k6 Performance Testing
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  performance-test:
+    name: Run k6 Load Tests
+    runs-on: ubuntu-latest
+
+    # Khởi tạo MongoDB service trên Github Actions
+    services:
+      mongodb:
+        image: mongo:6.0
+        ports:
+          - 27017:27017
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Start Backend Server (Background)
+        env:
+          PORT: 8080
+          MONGO_URI: mongodb://localhost:27017/flood_rescue_test
+          JWT_SECRET: k6_github_actions_secret_key
+        run: |
+          npm start &
+          # Cài wait-on để đảm bảo server khởi động xong mới chạy test
+          npx wait-on http://localhost:8080/api/users --timeout 30000
+
+      - name: Seed Database for k6
+        env:
+          MONGO_URI: mongodb://localhost:27017/flood_rescue_test
+        run: node tests/k6/seed-k6-data.js
+
+      - name: Run Scenario 1 - Login API
+        uses: grafana/k6-action@v0.3.1
+        env:
+          BASE_URL: http://localhost:8080
+          TEST_TYPE: load
+        with:
+          filename: tests/k6/scenario-1-login.js
+
+      - name: Run Scenario 2 - Get Requests API
+        uses: grafana/k6-action@v0.3.1
+        env:
+          BASE_URL: http://localhost:8080
+          TEST_TYPE: load
+        with:
+          filename: tests/k6/scenario-2-get-requests.js
+
+      - name: Run Scenario 3 - Mixed Workflow
+        uses: grafana/k6-action@v0.3.1
+        env:
+          BASE_URL: http://localhost:8080
+          TEST_TYPE: load
+        with:
+          filename: tests/k6/scenario-3-mixed-workflow.js
