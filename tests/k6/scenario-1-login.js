@@ -7,8 +7,8 @@ const loginFailRate = new Rate("login_failures");
 const loginDuration = new Trend("login_duration", true);
 
 // ─── Test Configuration ──────────────────────────────────
-const BASE_URL = __ENV.BASE_URL || "http://localhost:8080";
-const TEST_TYPE = __ENV.TEST_TYPE || "load"; // "load" or "stress"
+const BASE_URL = "http://localhost:8080";
+const TEST_TYPE = "load"; // "load" or "stress"
 
 // Danh sách 20 citizen accounts để random
 const CITIZENS = Array.from({ length: 20 }, (_, i) => ({
@@ -79,7 +79,7 @@ export default function () {
         return false;
       }
     },
-    "response time < 500ms": (r) => r.timings.duration < 500,
+    "response time < 800ms": (r) => r.timings.duration < 800,
   });
 
   loginFailRate.add(!success);

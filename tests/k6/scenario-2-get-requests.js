@@ -7,8 +7,8 @@ const requestFailRate = new Rate("request_failures");
 const requestDuration = new Trend("get_requests_duration", true);
 
 // ─── Test Configuration ──────────────────────────────────
-const BASE_URL = __ENV.BASE_URL || "http://localhost:8080";
-const TEST_TYPE = __ENV.TEST_TYPE || "load"; // "load" or "stress"
+const BASE_URL = "http://localhost:8080";
+const TEST_TYPE = "load"; // "load" or "stress"
 
 const COORDINATOR = {
   email: "k6_coordinator@test.com",
@@ -54,7 +54,7 @@ export function setup() {
       email: COORDINATOR.email,
       password: COORDINATOR.password,
     }),
-    { headers: { "Content-Type": "application/json" } }
+    { headers: { "Content-Type": "application/json" } },
   );
 
   const loginCheck = check(loginRes, {
@@ -64,7 +64,9 @@ export function setup() {
   if (!loginCheck) {
     console.error("❌ Setup failed: Cannot login as Coordinator");
     console.error("   Response:", loginRes.body);
-    console.error("   Have you run the seed script? node tests/k6/seed-k6-data.js");
+    console.error(
+      "   Have you run the seed script? node tests/k6/seed-k6-data.js",
+    );
     return { token: null };
   }
 
@@ -97,7 +99,7 @@ export default function (data) {
   // Gửi request
   const res = http.get(
     `${BASE_URL}/api/requests?page=${page}&limit=${limit}`,
-    params
+    params,
   );
 
   // Track custom metrics
@@ -161,9 +163,7 @@ export function handleSummary(data) {
 
   const failed = data.metrics.http_req_failed;
   if (failed) {
-    console.log(
-      `  ❌ Failure Rate: ${(failed.values.rate * 100).toFixed(2)}%`
-    );
+    console.log(`  ❌ Failure Rate: ${(failed.values.rate * 100).toFixed(2)}%`);
   }
 
   console.log(`${"═".repeat(60)}\n`);

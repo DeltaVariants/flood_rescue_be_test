@@ -22,7 +22,7 @@ jest.unstable_mockModule("../../../../src/modules/timelineSupplies/timelineSuppl
             create: jest.fn(),
             countDocuments: jest.fn(),
         }
-    }
+    };
 });
 
 jest.unstable_mockModule("../../../../src/modules/missionSupplies/missionSupply.model.js", () => {
@@ -32,7 +32,7 @@ jest.unstable_mockModule("../../../../src/modules/missionSupplies/missionSupply.
             findOne: jest.fn(),
             insertMany: jest.fn(),
         }
-    }
+    };
 });
 
 jest.unstable_mockModule("../../../../src/modules/inventory/inventoryItem.model.js", () => {
@@ -40,7 +40,7 @@ jest.unstable_mockModule("../../../../src/modules/inventory/inventoryItem.model.
         InventoryItem: {
             findById: jest.fn(),
         }
-    }
+    };
 });
 
 jest.unstable_mockModule("../../../../src/modules/supply/supply.model.js", () => {
@@ -49,7 +49,7 @@ jest.unstable_mockModule("../../../../src/modules/supply/supply.model.js", () =>
             findById: jest.fn(),
             find: jest.fn(),
         }
-    }
+    };
 });
 
 jest.unstable_mockModule("../../../../src/modules/timelines/timeline.model.js", () => {
@@ -57,7 +57,7 @@ jest.unstable_mockModule("../../../../src/modules/timelines/timeline.model.js", 
         default: {
             findById: jest.fn(),
         }
-    }
+    };
 });
 
 jest.unstable_mockModule("../../../../src/modules/teamRequests/teamRequest.model.js", () => {
@@ -65,7 +65,7 @@ jest.unstable_mockModule("../../../../src/modules/teamRequests/teamRequest.model
         default: {
             find: jest.fn(),
         }
-    }
+    };
 });
 
 const { timelineSupplyService } = await import("../../../../src/modules/timelineSupplies/timelineSupply.service.js");

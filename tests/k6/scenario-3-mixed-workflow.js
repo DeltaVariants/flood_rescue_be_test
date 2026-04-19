@@ -10,8 +10,8 @@ const getRequestsStepDuration = new Trend("step_get_requests_duration", true);
 const completedWorkflows = new Counter("completed_workflows");
 
 // ─── Test Configuration ──────────────────────────────────
-const BASE_URL = __ENV.BASE_URL || "http://localhost:8080";
-const TEST_TYPE = __ENV.TEST_TYPE || "load"; // "load" or "stress"
+const BASE_URL = "http://localhost:8080";
+const TEST_TYPE = "load"; // "load" or "stress"
 
 // Danh sách 20 citizen accounts
 const CITIZENS = Array.from({ length: 20 }, (_, i) => ({
@@ -110,9 +110,12 @@ export default function () {
 
   // ── Step 2: Get Me (Profile) ───────────────────────────
   group("Step 2: Get Me", function () {
-    const res = http.get(`${BASE_URL}/api/auth/me`, Object.assign({}, authHeaders, {
-      tags: { name: "GET /api/auth/me" },
-    }));
+    const res = http.get(
+      `${BASE_URL}/api/auth/me`,
+      Object.assign({}, authHeaders, {
+        tags: { name: "GET /api/auth/me" },
+      }),
+    );
 
     getMeStepDuration.add(res.timings.duration);
 
@@ -138,9 +141,12 @@ export default function () {
 
   // ── Step 3: Get My Requests ────────────────────────────
   group("Step 3: Get My Requests", function () {
-    const res = http.get(`${BASE_URL}/api/requests/my?page=1&limit=10`, Object.assign({}, authHeaders, {
-      tags: { name: "GET /api/requests/my" },
-    }));
+    const res = http.get(
+      `${BASE_URL}/api/requests/my?page=1&limit=10`,
+      Object.assign({}, authHeaders, {
+        tags: { name: "GET /api/requests/my" },
+      }),
+    );
 
     getRequestsStepDuration.add(res.timings.duration);
 

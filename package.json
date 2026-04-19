@@ -14,7 +14,9 @@
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:headed": "playwright test --headed",
     "test:seed": "node tests/setup/seedTestData.js",
-    "test:all": "npm run test && npm run test:e2e"
+    "test:all": "npm run test && npm run test:e2e",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix"
   },
   "author": "",
   "license": "ISC",
@@ -39,7 +41,10 @@
     "yamljs": "^0.3.0"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.58.2",
+    "eslint": "^10.2.1",
+    "globals": "^17.5.0",
     "jest": "^30.2.0",
     "playwright": "^1.58.2"
   }
