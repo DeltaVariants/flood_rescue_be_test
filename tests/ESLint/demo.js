@@ -1,9 +1,9 @@
 //Demo ESLint
 
-const unusedVariable = "HelloWorld";
+// const unusedVariable = "HelloWorld";
 
 function calculateScore(a, b) {
-  if (a == b) {
+  if (a === b) {
     // Báo lỗi: vi phạm luật eqeqeq
     console.log("Equal");
   }

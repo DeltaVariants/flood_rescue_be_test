@@ -13,7 +13,7 @@ export default [
   },
   pluginJs.configs.recommended, // Sử dụng bộ luật tiêu chuẩn của ESLint
   {
-    // Tùy chỉnh thêm một số luật (Rules) theo chuẩn dự án
+    // Các rules:
     rules: {
       "no-unused-vars": "warn", // Cảnh báo nếu có biến khai báo nhưng không dùng
       "no-console": "off", // Cho phép sử dụng console.log (vì backend thường cần log)

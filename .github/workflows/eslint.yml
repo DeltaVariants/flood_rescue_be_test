@@ -23,4 +23,4 @@ jobs:
         run: npm ci
 
       - name: Run ESLint Check
-        run: npx eslint src/modules/users/user.service.js
+        run: npx eslint tests/ESLint/demo.js

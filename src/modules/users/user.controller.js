@@ -1,6 +1,6 @@
-import mongoose from "mongoose";
 import { userService } from "./user.service.js";
 import response from "../../utils/response.js";
+import bcrypt from "bcrypt";
 
 
 
