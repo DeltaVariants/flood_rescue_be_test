@@ -261,7 +261,8 @@ describe('SupplyService', () => {
     it('should not emit event when supply not found', async () => {
       supplyRepository.updateSupply.mockResolvedValue(null);
 
-      try { await supplyService.updateSupply('invalid-id', {}, 'manager-001'); } catch {}
+      await expect(supplyService.updateSupply('invalid-id', {}, 'manager-001'))
+        .rejects.toThrow('Supply not found');
 
       expect(eventBus.emit).not.toHaveBeenCalled();
     });
@@ -306,7 +307,8 @@ describe('SupplyService', () => {
     it('should not emit event when supply not found', async () => {
       supplyRepository.deleteSupply.mockResolvedValue(null);
 
-      try { await supplyService.deleteSupply('invalid-id', 'manager-001'); } catch {}
+      await expect(supplyService.deleteSupply('invalid-id', 'manager-001'))
+        .rejects.toThrow('Supply not found');
 
       expect(eventBus.emit).not.toHaveBeenCalled();
     });

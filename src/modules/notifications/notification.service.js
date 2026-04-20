@@ -23,7 +23,9 @@ class NotificationService {
         data: savedNotification,
       };
     } catch (error) {
-      throw new Error(`Failed to create notification: ${error.message}`);
+      throw new Error(`Failed to create notification: ${error.message}`, {
+        cause: error,
+      });
     }
   }
 
@@ -83,9 +85,9 @@ class NotificationService {
         },
       };
     } catch (error) {
-      throw new Error(
-        `Failed to fetch notifications: ${error.message}`
-      );
+      throw new Error(`Failed to fetch notifications: ${error.message}`, {
+        cause: error,
+      });
     }
   }
 
@@ -101,7 +103,9 @@ class NotificationService {
         .populate("requestId", "type incidentType")
         .populate("teamApplicationId", "status motivation submittedPhoneNumber");
     } catch (error) {
-      throw new Error(`Failed to fetch notification: ${error.message}`);
+      throw new Error(`Failed to fetch notification: ${error.message}`, {
+        cause: error,
+      });
     }
   }
 
@@ -118,7 +122,9 @@ class NotificationService {
         { new: true }
       );
     } catch (error) {
-      throw new Error(`Failed to update notification: ${error.message}`);
+      throw new Error(`Failed to update notification: ${error.message}`, {
+        cause: error,
+      });
     }
   }
 
@@ -131,7 +137,9 @@ class NotificationService {
     try {
       return await NotifyModel.findByIdAndDelete(notificationId);
     } catch (error) {
-      throw new Error(`Failed to delete notification: ${error.message}`);
+      throw new Error(`Failed to delete notification: ${error.message}`, {
+        cause: error,
+      });
     }
   }
 
@@ -148,7 +156,9 @@ class NotificationService {
         deletedCount: result.deletedCount,
       };
     } catch (error) {
-      throw new Error(`Failed to delete notifications: ${error.message}`);
+      throw new Error(`Failed to delete notifications: ${error.message}`, {
+        cause: error,
+      });
     }
   }
 
@@ -165,7 +175,9 @@ class NotificationService {
       });
       return count;
     } catch (error) {
-      throw new Error(`Failed to get unread count: ${error.message}`);
+      throw new Error(`Failed to get unread count: ${error.message}`, {
+        cause: error,
+      });
     }
   }
 
@@ -185,7 +197,9 @@ class NotificationService {
         modifiedCount: result.modifiedCount,
       };
     } catch (error) {
-      throw new Error(`Failed to mark all as read: ${error.message}`);
+      throw new Error(`Failed to mark all as read: ${error.message}`, {
+        cause: error,
+      });
     }
   }
 }

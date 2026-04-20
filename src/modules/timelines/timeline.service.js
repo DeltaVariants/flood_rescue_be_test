@@ -836,11 +836,11 @@ class TimelineService {
     const missionRequestStatuses = missionRequests.map((item) => item.status);
 
     if (missionRequestStatuses.length > 0) {
-      let desiredFromMissionRequest = request.status;
-
       const hasNonTerminal = missionRequestStatuses.some((status) =>
         ["PENDING", "IN_PROGRESS"].includes(status),
       );
+
+      let desiredFromMissionRequest;
       if (hasNonTerminal) {
         desiredFromMissionRequest = REQUEST_STATUS.IN_PROGRESS;
       } else {

@@ -1,19 +1,19 @@
-import mongoose from "mongoose";
 import { userService } from "./user.service.js";
 import response from "../../utils/response.js";
-
-
-
+import bcrypt from "bcryptjs";
 
 export const createUser = async (req, res) => {
   const { name, email, password, role } = req.body;
 
-  const user = await userService.createUser({
-    name,
-    email,
-    password: await bcrypt.hash(password, 10),
-    role,
-  }, req.user.id);
+  const user = await userService.createUser(
+    {
+      name,
+      email,
+      password: await bcrypt.hash(password, 10),
+      role,
+    },
+    req.user.id,
+  );
 
   res.json(user);
 };
@@ -50,11 +50,9 @@ export const listUsers = async (req, res) => {
     if (req.query.displayName !== undefined)
       filter.displayName = new RegExp(req.query.displayName, "i");
 
-    if (req.query.email)
-      filter.email = new RegExp(req.query.email, "i");
+    if (req.query.email) filter.email = new RegExp(req.query.email, "i");
 
-    if (req.query.role)
-      filter.role = new RegExp(req.query.role, "i");
+    if (req.query.role) filter.role = new RegExp(req.query.role, "i");
 
     const { data, ...pagination } = result;
 
@@ -63,14 +61,11 @@ export const listUsers = async (req, res) => {
       message: "Users retrieved successfully",
       meta: pagination,
     });
-
   } catch (err) {
-
     return response.sendError(res, {
       message: err.message,
       statusCode: 400,
     });
-
   }
 };
 
@@ -103,11 +98,9 @@ export const updateUserRole = async (req, res) => {
       message: err.message,
       statusCode,
       errorCode:
-        statusCode === 403
-          ? "FORBIDDEN"
-          : statusCode === 404
-            ? "NOT_FOUND"
-            : "BAD_REQUEST",
+        statusCode === 403 ? "FORBIDDEN"
+        : statusCode === 404 ? "NOT_FOUND"
+        : "BAD_REQUEST",
     });
   }
 };
