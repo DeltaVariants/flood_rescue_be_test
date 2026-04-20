@@ -167,3 +167,35 @@ _(Phần này bạn tự trình bày tổng quan cấu trúc đã có: dự án 
 3. **Giải thích khi demo:**
    - Bạn giải thích: _Khi dòng `run: npm run lint` xảy ra lỗi ở GitHub Actions, job này sẽ bị đánh dấu `Failed` (dấu X màu đỏ)._
    - Điều này giúp GitHub chặn (block) luồng Pull Request, không cho một người team member nào đó merge code chưa chuẩn mực vào nhánh gốc, rèn luyện được kỉ luật cho team.
+
+---
+
+## 6. Nâng cao: Chặn lỗi bằng Git Hook với Husky (Nên thêm vào bài thuyết trình)
+
+**Mục tiêu:** Cho người xem thấy cách chặn code "bẩn" lại ngay trên máy tính của Developer, trước khi code được `git commit`.
+
+**Các bước thực hiện:**
+
+1. **Cài đặt Husky:**
+   Chạy lệnh sau trong terminal:
+   ```bash
+   npm install husky --save-dev
+   npx husky init
+   ```
+
+2. **Cấu hình Hook `pre-commit`:**
+   Lệnh `npx husky init` sẽ tạo ra một thư mục `.husky` và file `.husky/pre-commit` ở thư mục gốc dự án. Mở file `.husky/pre-commit` lên và thay thế nội dung thành:
+   ```bash
+   # Chỉ check file demo để trình diễn (hoặc đổi thành npm run lint nếu muốn check cả dự án)
+   npx eslint tests/ESLint/demo.js
+   ```
+
+3. **Trình diễn (Demo) lỗi Hook:**
+   - Bạn mở file `tests/ESLint/demo.js`, xóa một cái dấu `;` để tạo ra lỗi.
+   - Trở lại terminal, gõ:
+     ```bash
+     git add .
+     git commit -m "Update demo file"
+     ```
+   - **Kết quả "Wow":** Terminal sẽ in ra thông báo lỗi của ESLint (đỏ rực) và **hủy bỏ quá trình commit**. 
+   - **Giải thích cho khán giả:** *"Nhờ pre-commit hook của Husky, dù một dev có nhấn lệnh commit, nếu code chưa qua ải ESLint, nó sẽ không bao giờ được phép nằm trong lịch sử git. Đây là vòng phòng ngự đầu tiên hoàn hảo."*
