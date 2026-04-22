@@ -1,10 +1,14 @@
-# Get staged JavaScript files
-files=$(git diff --cached --name-only --diff-filter=ACMR | grep -E '\.js$')
+#!/bin/sh
+# Get staged JavaScript files using git's built-in filtering
+files=$(git diff --cached --name-only --diff-filter=ACMR -- "*.js")
 
-if [ -n "$files" ]; then
-  echo "Running ESLint on staged files..."
-  # Use echo to pass the list to npm/eslint which handles the space-separated arguments
-  echo "$files" | xargs npx eslint
-else
-  echo "No staged JavaScript files to lint."
+# If no files, exit early with success
+if [ -z "$files" ]; then
+  exit 0
 fi
+
+echo "Running ESLint on staged files..."
+# Run eslint on the list of files
+# Note: $files is intentionally left unquoted to allow the shell to split 
+# the filenames into separate arguments for eslint
+npx eslint $files
