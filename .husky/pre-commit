@@ -1,1 +1,10 @@
-npx eslint tests/ESLint/demo.js
+# Get staged JavaScript files
+files=$(git diff --cached --name-only --diff-filter=ACMR | grep -E '\.js$')
+
+if [ -n "$files" ]; then
+  echo "Running ESLint on staged files..."
+  # Use echo to pass the list to npm/eslint which handles the space-separated arguments
+  echo "$files" | xargs npx eslint
+else
+  echo "No staged JavaScript files to lint."
+fi
